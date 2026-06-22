@@ -2,9 +2,11 @@ name: AI 日报推送
 
 on:
   schedule:
-    # 每天北京时间 8:15（UTC 00:15）
     - cron: '15 0 * * *'
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   push:
@@ -20,7 +22,19 @@ jobs:
         with:
           node-version: '22'
 
-      - name: 推送 AI 日报到飞书
+      - name: 推送日报到飞书并生成备份
         env:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
         run: node push-to-feishu.mjs
+
+      - name: 提交日报备份到仓库
+        run: |
+          git config user.name "AI日报机器人"
+          git config user.email "ai-daily@github.com"
+          git add daily/
+          if git diff --cached --quiet; then
+            echo "没有新的日报备份"
+          else
+            git commit -m "📰 $(date +%Y-%m-%d) AI日报备份"
+            git push
+          fi

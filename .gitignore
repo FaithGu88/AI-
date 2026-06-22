@@ -1,3 +1,4 @@
 node_modules/
 .env
 payload-debug.json
+# daily/ is committed by GitHub Actions for Obsidian backup
