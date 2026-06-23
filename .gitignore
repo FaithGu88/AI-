@@ -1,4 +1,8 @@
 node_modules/
 .env
 payload-debug.json
-# daily/ is committed by GitHub Actions for Obsidian backup
+
+# Only daily/*.md are managed by GitHub Actions; ignore Obsidian configs and other files
+daily/.obsidian/
+daily/**/*.xlsx
+daily/**/.DS_Store
