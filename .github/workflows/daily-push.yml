@@ -2,8 +2,10 @@ name: AI 日报推送
 
 on:
   schedule:
-    # 北京时间 8:23（UTC 00:23）— 避开整点/整刻高峰
-    - cron: '23 0 * * *'
+    # 多个时间兜底，避免单点被跳过（any single cron may be skipped by GitHub）
+    - cron: '23 0 * * *'   # 北京时间 8:23
+    - cron: '47 1 * * *'   # 北京时间 9:47 (fallback)
+    - cron: '13 3 * * *'   # 北京时间 11:13 (fallback)
   workflow_dispatch:
 
 permissions:

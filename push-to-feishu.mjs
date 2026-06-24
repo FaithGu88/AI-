@@ -237,6 +237,13 @@ async function sendToFeishu(postPayload) {
 // -- Main ---------------------------------------------------------------------
 
 async function main() {
+  // Dedup: skip if already pushed today
+  const todayFile = `daily/${today()}.md`;
+  if (existsSync(todayFile)) {
+    console.log(`⏭️  今日已推送，跳过 (${todayFile} 已存在)`);
+    return;
+  }
+
   // 1. Fetch AI HOT
   console.log('📡 拉取 AI HOT 数据...');
   const aihot = await fetchAihot();
