@@ -1,11 +1,15 @@
 name: AI 日报推送
 
 on:
+  # 主力：cron-job.org 通过 repository_dispatch 精确触发
+  repository_dispatch:
+    types: [daily-push]
+  # 备用：GitHub 原生 cron（不可靠，但聊胜于无）
   schedule:
-    # 多个时间兜底，避免单点被跳过（any single cron may be skipped by GitHub）
-    - cron: '23 0 * * *'   # 北京时间 8:23
-    - cron: '47 1 * * *'   # 北京时间 9:47 (fallback)
-    - cron: '13 3 * * *'   # 北京时间 11:13 (fallback)
+    - cron: '23 0 * * *'
+    - cron: '47 1 * * *'
+    - cron: '13 3 * * *'
+  # 手动触发
   workflow_dispatch:
 
 permissions:
