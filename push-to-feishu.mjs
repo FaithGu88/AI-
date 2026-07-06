@@ -4,7 +4,7 @@
 // ============================================================================
 // 1. 拉取 AI HOT 日报 API
 // 2. 格式化为飞书富文本 → 推送到飞书群
-// 3. 生成 Markdown → 存入 daily/ 目录（Obsidian 备份）
+// 3. 生成 Markdown → 存入 daily/AI日报/ 目录（Obsidian 备份）
 //
 // Usage:   node push-to-feishu.mjs
 // Env:     FEISHU_WEBHOOK (or .env file)
@@ -211,7 +211,7 @@ function generateMarkdown(aihotResult) {
 }
 
 function saveMarkdown(content) {
-  const dir = 'daily';
+  const dir = join(import.meta.dirname, 'daily', 'AI日报');
   mkdirSync(dir, { recursive: true });
   const filename = `${dir}/${today()}.md`;
   writeFileSync(filename, content, 'utf-8');
@@ -238,7 +238,7 @@ async function sendToFeishu(postPayload) {
 
 async function main() {
   // Dedup: skip if already pushed today
-  const todayFile = `daily/${today()}.md`;
+  const todayFile = join(import.meta.dirname, 'daily', 'AI日报', `${today()}.md`);
   if (existsSync(todayFile)) {
     console.log(`⏭️  今日已推送，跳过 (${todayFile} 已存在)`);
     return;

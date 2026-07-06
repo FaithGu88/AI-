@@ -2,7 +2,7 @@ node_modules/
 .env
 payload-debug.json
 
-# daily/ — only keep YYYY-MM-DD.md reports, ignore everything else (Obsidian vault files etc.)
-daily/*
-!daily/????-??-??.md
-daily/**/*
+# daily/ — only keep daily/AI日报/YYYY-MM-DD.md, ignore everything else
+daily/**
+!daily/AI日报/
+!daily/AI日报/????-??-??.md
