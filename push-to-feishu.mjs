@@ -234,6 +234,21 @@ async function sendToFeishu(postPayload) {
   return result;
 }
 
+// -- Retry helper -------------------------------------------------------------
+
+async function retry(fn, label, maxAttempts = 3) {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === maxAttempts - 1) throw err;
+      const delay = (i + 1) * 5;
+      console.log(`   ${label} 失败 (${err.message})，${delay}s 后重试...`);
+      await new Promise(r => setTimeout(r, delay * 1000));
+    }
+  }
+}
+
 // -- Main ---------------------------------------------------------------------
 
 async function main() {
@@ -244,9 +259,9 @@ async function main() {
     return;
   }
 
-  // 1. Fetch AI HOT
+  // 1. Fetch AI HOT (with retry)
   console.log('📡 拉取 AI HOT 数据...');
-  const aihot = await fetchAihot();
+  const aihot = await retry(() => fetchAihot(), 'AI HOT API');
   console.log(`   来源: ${aihot.type}${aihot.type === 'items' ? ' (日报未生成，使用精选回退)' : ''}`);
 
   // 2. Format Feishu blocks
@@ -261,7 +276,7 @@ async function main() {
   };
 
   console.log('📤 推送到飞书...');
-  await sendToFeishu(post);
+  await retry(() => sendToFeishu(post), '飞书推送');
   console.log('✅ 飞书推送成功');
 
   // 4. Save Markdown backup
