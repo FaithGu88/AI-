@@ -285,7 +285,18 @@ async function main() {
   console.log(`✅ 完成 — ${filepath}`);
 }
 
-main().catch(err => {
+main().catch(async err => {
   console.error('❌ 失败:', err.message);
+  // 报错也推送给飞书，避免静默失败
+  try {
+    await fetch(FEISHU_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        msg_type: 'text',
+        content: { text: `⚠️ AI日报推送失败\n\n错误：${err.message}\n时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n\nAI HOT API 可能挂掉了，请手动检查 https://aihot.virxact.com` }
+      })
+    });
+  } catch {}
   process.exit(1);
 });
