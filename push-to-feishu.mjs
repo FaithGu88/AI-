@@ -27,8 +27,8 @@ const FEISHU_WEBHOOK = (() => {
   process.exit(1);
 })();
 
-const AIHOT_BASE = 'https://aihot.virxact.com';
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 aihot-skill/0.2.0';
+const AIHOT_BASE = 'https://aihot.news';
+const UA = 'aihot-api/2.0.0 aihot-actor/ai-daily';
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -43,14 +43,14 @@ const today = () => new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 // -- Data: fetch both sources -------------------------------------------------
 
 async function fetchAihot() {
-  // Try daily report first, fall back to selected items
+  // v1：先取最新日报（从顶层 report 读取），失败则回退到最近 24h 精选
   try {
-    return { type: 'daily', data: await fetchJSON(`${AIHOT_BASE}/api/public/daily`) };
+    const json = await fetchJSON(`${AIHOT_BASE}/api/v1/dailies/latest`);
+    return { type: 'daily', data: json.report || json };
   } catch {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     return {
       type: 'items',
-      data: await fetchJSON(`${AIHOT_BASE}/api/public/items?mode=selected&since=${encodeURIComponent(since)}&take=50`)
+      data: await fetchJSON(`${AIHOT_BASE}/api/v1/items?mode=selected&window=24h&limit=50`)
     };
   }
 }
@@ -65,23 +65,20 @@ function formatDailyBlocks(data) {
 
   if (data.lead?.title) {
     blocks.push([{ tag: 'text', text: `📌 ${data.lead.title}` }]);
-    if (data.lead.summary) blocks.push([{ tag: 'text', text: data.lead.summary }]);
-    if (data.lead.editorNote) blocks.push([{ tag: 'text', text: `💬 ${data.lead.editorNote}` }]);
+    if (data.lead.leadParagraph) blocks.push([{ tag: 'text', text: data.lead.leadParagraph }]);
     blocks.push([{ tag: 'text', text: '' }]);
   }
 
   let n = 0;
   const sections = data.sections || [];
-  const flashSection = sections.find(s => s.label === '快讯' || s.type === 'flash');
-  const mainSections = sections.filter(s => s !== flashSection);
 
-  for (const section of mainSections) {
+  for (const section of sections) {
     blocks.push([{ tag: 'text', text: `▎${section.label}` }]);
     for (const item of (section.items || [])) {
       n++;
-      const title = item.title || item.title_en || '(无标题)';
-      const url = item.sourceUrl || '';
-      const source = item.sourceName || '';
+      const title = item.title || item.originalTitle || '(无标题)';
+      const url = item.links?.original || '';
+      const source = item.source?.name || '';
       const line = [{ tag: 'text', text: `${n}. ` }];
       if (url) { line.push({ tag: 'a', text: title, href: url }); }
       else { line.push({ tag: 'text', text: title }); }
@@ -91,11 +88,12 @@ function formatDailyBlocks(data) {
     blocks.push([{ tag: 'text', text: '' }]);
   }
 
-  if (flashSection?.items?.length) {
+  const flashes = data.flashes || [];
+  if (flashes.length) {
     blocks.push([{ tag: 'text', text: '⚡ 快讯' }]);
-    for (const item of flashSection.items.slice(0, 10)) {
-      const title = item.title || item.title_en || '';
-      const url = item.sourceUrl || '';
+    for (const item of flashes.slice(0, 10)) {
+      const title = item.title || item.originalTitle || '';
+      const url = item.links?.original || '';
       const line = [{ tag: 'text', text: '• ' }];
       if (url) { line.push({ tag: 'a', text: title, href: url }); }
       else { line.push({ tag: 'text', text: title }); }
@@ -118,7 +116,7 @@ function formatItemsBlocks(data) {
     return blocks;
   }
 
-  const catMap = { 'ai-models': '模型发布/更新', 'ai-products': '产品发布/更新', 'industry': '行业动态', 'paper': '论文研究', 'tip': '技巧与观点' };
+  const catMap = { 'ai-models': '模型发布/更新', 'ai-products': '产品发布/更新', 'industry': '行业动态', 'paper': '论文研究', 'tip': '教程', 'opinion': '观点' };
   const grouped = {};
   for (const item of items) {
     const cat = item.category || 'other';
@@ -130,9 +128,9 @@ function formatItemsBlocks(data) {
     blocks.push([{ tag: 'text', text: `▎${catMap[cat] || cat}` }]);
     for (const item of catItems) {
       n++;
-      const title = item.title || item.title_en || '(无标题)';
-      const url = item.url || '';
-      const source = item.source || '';
+      const title = item.title || item.originalTitle || '(无标题)';
+      const url = item.links?.original || '';
+      const source = item.source?.name || '';
       const line = [{ tag: 'text', text: `${n}. ` }];
       if (url) { line.push({ tag: 'a', text: title, href: url }); }
       else { line.push({ tag: 'text', text: title }); }
@@ -150,43 +148,42 @@ function formatItemsBlocks(data) {
 function generateMarkdown(aihotResult) {
   const { type, data } = aihotResult;
   const dateStr = today();
-  const lines = [`# AI日报 — ${dateStr}`, '', '> 由 AI日报 自动生成 · 数据来源 [AI HOT](https://aihot.virxact.com)', ''];
+  const lines = [`# AI日报 — ${dateStr}`, '', '> 由 AI日报 自动生成 · 数据来源 [AI HOT](https://aihot.news)', ''];
 
   if (type === 'daily') {
     if (data.lead?.title) {
       lines.push(`**${data.lead.title}**`, '');
-      if (data.lead.summary) lines.push(data.lead.summary, '');
-      if (data.lead.editorNote) lines.push(`> 💬 ${data.lead.editorNote}`, '');
+      if (data.lead.leadParagraph) lines.push(data.lead.leadParagraph, '');
       lines.push('');
     }
 
     let n = 0;
     const sections = data.sections || [];
-    const flash = sections.find(s => s.label === '快讯' || s.type === 'flash');
 
-    for (const section of sections.filter(s => s !== flash)) {
+    for (const section of sections) {
       lines.push(`## ${section.label}`, '');
       for (const item of (section.items || [])) {
         n++;
-        const title = item.title || item.title_en || '(无标题)';
-        const url = item.sourceUrl || '';
-        const source = item.sourceName || '';
+        const title = item.title || item.originalTitle || '(无标题)';
+        const url = item.links?.original || '';
+        const source = item.source?.name || '';
         lines.push(`${n}. ${url ? `[${title}](${url})` : title}${source ? ` — ${source}` : ''}`);
       }
       lines.push('');
     }
 
-    if (flash?.items?.length) {
+    const flashes = data.flashes || [];
+    if (flashes.length) {
       lines.push('## ⚡ 快讯', '');
-      for (const item of flash.items) {
-        const title = item.title || item.title_en || '';
-        const url = item.sourceUrl || '';
+      for (const item of flashes) {
+        const title = item.title || item.originalTitle || '';
+        const url = item.links?.original || '';
         lines.push(`- ${url ? `[${title}](${url})` : title}`);
       }
       lines.push('');
     }
   } else {
-    const catMap = { 'ai-models': '模型发布/更新', 'ai-products': '产品发布/更新', 'industry': '行业动态', 'paper': '论文研究', 'tip': '技巧与观点' };
+    const catMap = { 'ai-models': '模型发布/更新', 'ai-products': '产品发布/更新', 'industry': '行业动态', 'paper': '论文研究', 'tip': '教程', 'opinion': '观点' };
     const grouped = {};
     for (const item of (data.items || [])) {
       (grouped[item.category || 'other'] ??= []).push(item);
@@ -197,9 +194,9 @@ function generateMarkdown(aihotResult) {
       lines.push(`## ${catMap[cat] || cat}`, '');
       for (const item of items) {
         n++;
-        const title = item.title || item.title_en || '(无标题)';
-        const url = item.url || '';
-        const source = item.source || '';
+        const title = item.title || item.originalTitle || '(无标题)';
+        const url = item.links?.original || '';
+        const source = item.source?.name || '';
         lines.push(`${n}. ${url ? `[${title}](${url})` : title}${source ? ` — ${source}` : ''}`);
       }
       lines.push('');
@@ -294,7 +291,7 @@ main().catch(async err => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         msg_type: 'text',
-        content: { text: `⚠️ AI日报推送失败\n\n错误：${err.message}\n时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n\nAI HOT API 可能挂掉了，请手动检查 https://aihot.virxact.com` }
+        content: { text: `⚠️ AI日报推送失败\n\n错误：${err.message}\n时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n\nAI HOT API 可能挂掉了，请手动检查 https://aihot.news` }
       })
     });
   } catch {}
